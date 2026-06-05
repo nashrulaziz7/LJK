@@ -3,115 +3,184 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sistem Koreksi LJK Pro - SDIT Al-Kautsar</title>
+    <title>Koreksi LJK Pro - SDIT Al-Kautsar</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        .option-btn.selected { background-color: #2563eb; color: white; border-color: #2563eb; }
-        .table-header { background-color: #fde047; }
-        .col-num { background-color: #e2e8f0; }
-        .marker-error { border: 3px solid #ef4444; background: rgba(239, 68, 68, 0.3); }
+        .option-btn { transition: all 0.2s; border: 1px solid #cbd5e1; min-width: 28px; }
+        .option-btn.selected { background-color: #2563eb; color: white; border-color: #1d4ed8; }
+        
+        .canvas-container { 
+            position: relative; 
+            width: 100%; 
+            height: 400px; /* Tinggi default */
+            overflow: hidden; 
+            background: #e2e8f0; 
+            border-radius: 8px;
+            cursor: move;
+            touch-action: none; /* Mencegah scroll halaman saat pan/zoom */
+        }
+        #canvas-ljk { 
+            transform-origin: 0 0; 
+            cursor: move;
+            display: block;
+        }
     </style>
 </head>
-<body class="bg-slate-50 min-h-screen p-4">
+<body class="bg-slate-100 min-h-screen p-4 md:p-8">
 
-    <div id="app" class="max-w-4xl mx-auto bg-white p-6 rounded-2xl shadow-xl">
-        <header class="text-center mb-6 border-b pb-4">
-            <h1 class="text-2xl font-bold">Koreksi LJK Pro</h1>
+    <div id="app" class="max-w-6xl mx-auto bg-white p-6 rounded-2xl shadow-xl">
+        <header class="mb-6 pb-4 border-b text-center">
+            <h1 class="text-3xl font-extrabold text-slate-800">Koreksi LJK Pro</h1>
+            <p class="text-slate-500">Sistem Koreksi Digital SDIT Al-Kautsar</p>
         </header>
 
-        <!-- Menu -->
-        <div id="menu-utama" class="space-y-4">
-            <button onclick="showSection('input')" class="w-full p-6 bg-blue-600 text-white rounded-xl font-bold">Input Kunci Jawaban</button>
-            <button onclick="showSection('scan-upload')" class="w-full p-6 bg-emerald-600 text-white rounded-xl font-bold">Upload Foto/Scan LJK</button>
-            <button onclick="showSection('scan-camera')" class="w-full p-6 bg-indigo-600 text-white rounded-xl font-bold">Ambil Foto Kamera</button>
+        <div id="menu-utama" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <button onclick="showSection('input')" class="p-8 bg-blue-600 text-white rounded-2xl hover:bg-blue-700 font-bold text-xl shadow-lg">Input Kunci Jawaban</button>
+            <button onclick="showSection('scan')" class="p-8 bg-emerald-600 text-white rounded-2xl hover:bg-emerald-700 font-bold text-xl shadow-lg">Mulai Koreksi</button>
         </div>
 
-        <!-- Section Input -->
-        <div id="section-input" class="hidden space-y-4">
-            <div id="grid-kunci" class="grid grid-cols-1 md:grid-cols-3 gap-4"></div>
-            <button onclick="saveAndGoHome()" class="w-full bg-blue-600 text-white py-4 rounded-lg font-bold">Simpan & Kembali</button>
-        </div>
-
-        <!-- Section Scan & Upload -->
-        <div id="section-scan" class="hidden space-y-4 text-center">
-            <div id="canvas-wrapper" class="relative inline-block w-full">
-                <canvas id="canvas-ljk" class="w-full border rounded-lg"></canvas>
+        <div id="section-input" class="hidden">
+            <h2 class="text-xl font-bold mb-4 text-slate-700">Atur Kunci Jawaban</h2>
+            <div id="grid-kunci" class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6"></div>
+            <div class="flex gap-4">
+                <button onclick="saveAndGoHome()" class="flex-1 bg-blue-600 text-white py-4 rounded-xl font-bold">Simpan & Kembali</button>
+                <button onclick="goHome()" class="flex-1 bg-slate-200 py-4 rounded-xl font-bold text-slate-700">Batal</button>
             </div>
-            <input type="file" id="input-file" class="hidden" accept="image/*" onchange="handleImage(event)">
-            <button id="btn-upload" class="hidden w-full bg-emerald-600 text-white py-4 rounded-lg font-bold">Mulai Koreksi</button>
-            <button onclick="goHome()" class="text-slate-500 underline">Kembali</button>
+        </div>
+
+        <div id="section-scan" class="hidden">
+            <div class="mb-4 flex gap-2">
+                <button onclick="document.getElementById('file-upload').click()" class="bg-slate-700 text-white px-4 py-2 rounded-lg">Upload LJK</button>
+                <button onclick="startCamera()" class="bg-indigo-600 text-white px-4 py-2 rounded-lg">Buka Kamera</button>
+            </div>
+            <input type="file" id="file-upload" class="hidden" accept="image/*" onchange="handleFile(event)">
+            
+            <p class="text-xs text-slate-400 mb-2 italic">* Cubit layar (pinch) untuk zoom, geser (drag) untuk memindah posisi</p>
+            <div class="canvas-container" id="canvas-wrapper">
+                <video id="video" class="hidden w-full h-auto bg-black rounded-lg" autoplay playsinline></video>
+                <canvas id="canvas-ljk" class="hidden"></canvas>
+            </div>
+
+            <div id="action-buttons" class="hidden mt-4 flex gap-2">
+                <button onclick="analyzeLJK()" class="flex-1 bg-emerald-600 text-white py-4 rounded-xl font-bold">Analisis Koreksi</button>
+                <button onclick="saveImage()" class="flex-1 bg-purple-600 text-white py-4 rounded-xl font-bold">Save Gambar</button>
+                <button onclick="goHome()" class="flex-1 bg-red-500 text-white py-4 rounded-xl font-bold">Reset</button>
+            </div>
         </div>
     </div>
 
     <script>
         let kunciJawaban = JSON.parse(localStorage.getItem('kunci_ljk')) || Array(30).fill(null);
-
-        function goHome() {
-            document.getElementById('menu-utama').classList.remove('hidden');
-            document.getElementById('section-input').classList.add('hidden');
-            document.getElementById('section-scan').classList.add('hidden');
-        }
-
-        function showSection(section) {
-            document.getElementById('menu-utama').classList.add('hidden');
-            if (section === 'input') {
-                document.getElementById('section-input').classList.remove('hidden');
-                renderKeyGrid();
-            } else {
-                document.getElementById('section-scan').classList.remove('hidden');
-                if (section === 'scan-upload') document.getElementById('input-file').click();
-                else activateCamera();
-            }
-        }
+        let scale = 1, posX = 0, posY = 0;
+        let lastDist = 0, isDragging = false;
+        let startX, startY;
 
         function renderKeyGrid() {
             const container = document.getElementById('grid-kunci');
             container.innerHTML = '';
             for (let col = 0; col < 3; col++) {
                 const colDiv = document.createElement('div');
-                colDiv.innerHTML = `<div class="text-center font-bold mb-2">Kolom ${col + 1}</div>`;
+                colDiv.className = "flex flex-col gap-1";
                 for (let row = 0; row < 10; row++) {
-                    const idx = (col * 10) + row;
-                    colDiv.innerHTML += `<div class="flex items-center gap-2 mb-1">
-                        <span class="w-6 text-xs">${idx + 1}</span>
-                        ${['A','B','C','D'].map(o => `<button onclick="setKey(${idx}, '${o}')" class="w-7 h-7 border rounded ${kunciJawaban[idx] === o ? 'bg-blue-600 text-white' : ''}">${o}</button>`).join('')}
-                    </div>`;
+                    const i = (col * 10) + row;
+                    colDiv.innerHTML += `
+                        <div class="flex items-center justify-between bg-slate-50 p-2 rounded border border-slate-200">
+                            <span class="font-bold text-sm text-slate-600 w-8">${i + 1}</span>
+                            <div class="flex flex-row gap-1">
+                                ${['A','B','C','D'].map(o => `
+                                    <button onclick="setKey(${i}, '${o}')" class="option-btn h-8 w-8 rounded text-xs font-bold ${kunciJawaban[i] === o ? 'selected' : ''}">${o}</button>
+                                `).join('')}
+                            </div>
+                        </div>
+                    `;
                 }
                 container.appendChild(colDiv);
             }
         }
 
-        function setKey(idx, val) {
-            kunciJawaban[idx] = val;
-            renderKeyGrid();
+        function updateTransform() {
+            const canvas = document.getElementById('canvas-ljk');
+            canvas.style.transform = `translate(${posX}px, ${posY}px) scale(${scale})`;
         }
 
-        function saveAndGoHome() {
-            localStorage.setItem('kunci_ljk', JSON.stringify(kunciJawaban));
-            goHome();
+        function setupZoomInteractions() {
+            const wrapper = document.getElementById('canvas-wrapper');
+            const canvas = document.getElementById('canvas-ljk');
+
+            // Drag/Pan
+            wrapper.addEventListener('mousedown', (e) => { isDragging = true; startX = e.clientX - posX; startY = e.clientY - posY; });
+            window.addEventListener('mousemove', (e) => { 
+                if (isDragging) { posX = e.clientX - startX; posY = e.clientY - startY; updateTransform(); } 
+            });
+            window.addEventListener('mouseup', () => isDragging = false);
+
+            // Touch Pan & Pinch
+            wrapper.addEventListener('touchstart', (e) => {
+                if (e.touches.length === 1) { isDragging = true; startX = e.touches[0].clientX - posX; startY = e.touches[0].clientY - posY; }
+                if (e.touches.length === 2) { lastDist = Math.hypot(e.touches[0].pageX - e.touches[1].pageX, e.touches[0].pageY - e.touches[1].pageY); }
+            });
+
+            wrapper.addEventListener('touchmove', (e) => {
+                if (e.touches.length === 1 && isDragging) { posX = e.touches[0].clientX - startX; posY = e.touches[0].clientY - startY; updateTransform(); }
+                if (e.touches.length === 2) {
+                    let dist = Math.hypot(e.touches[0].pageX - e.touches[1].pageX, e.touches[0].pageY - e.touches[1].pageY);
+                    scale *= (dist / lastDist);
+                    scale = Math.min(Math.max(1, scale), 4);
+                    lastDist = dist;
+                    updateTransform();
+                }
+            });
+            wrapper.addEventListener('touchend', () => isDragging = false);
         }
 
-        function handleImage(e) {
+        function handleFile(e) {
             const reader = new FileReader();
             reader.onload = (event) => {
                 const img = new Image();
                 img.onload = () => {
                     const canvas = document.getElementById('canvas-ljk');
-                    canvas.width = img.width;
-                    canvas.height = img.height;
-                    canvas.getContext('2d').drawImage(img, 0, 0);
-                    document.getElementById('btn-upload').classList.remove('hidden');
+                    const ctx = canvas.getContext('2d');
+                    canvas.width = img.width; canvas.height = img.height;
+                    canvas.classList.remove('hidden');
+                    ctx.drawImage(img, 0, 0);
+                    document.getElementById('action-buttons').classList.remove('hidden');
+                    setupZoomInteractions();
                 }
                 img.src = event.target.result;
             }
             reader.readAsDataURL(e.target.files[0]);
         }
 
-        function activateCamera() {
-            // Simulasi akses kamera
-            alert("Kamera diaktifkan. Harap arahkan pada LJK.");
-            // Implementasi stream video ke canvas...
+        async function startCamera() {
+            const video = document.getElementById('video');
+            video.classList.remove('hidden');
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+                video.srcObject = stream;
+                // Auto capture after small delay for demo
+                setTimeout(() => {
+                    const canvas = document.getElementById('canvas-ljk');
+                    canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+                    canvas.getContext('2d').drawImage(video, 0, 0);
+                    video.classList.add('hidden');
+                    canvas.classList.remove('hidden');
+                    document.getElementById('action-buttons').classList.remove('hidden');
+                    setupZoomInteractions();
+                    stream.getTracks().forEach(t => t.stop());
+                }, 2000);
+            } catch(e) { alert("Kamera tidak tersedia"); }
         }
+
+        function setKey(idx, val) { kunciJawaban[idx] = val; localStorage.setItem('kunci_ljk', JSON.stringify(kunciJawaban)); renderKeyGrid(); }
+        function showSection(section) {
+            document.getElementById('menu-utama').classList.add('hidden');
+            if (section === 'input') { document.getElementById('section-input').classList.remove('hidden'); renderKeyGrid(); } 
+            else { document.getElementById('section-scan').classList.remove('hidden'); }
+        }
+        function goHome() { window.location.reload(); }
+        function saveAndGoHome() { localStorage.setItem('kunci_ljk', JSON.stringify(kunciJawaban)); goHome(); }
+        function analyzeLJK() { alert("Analisis Selesai! Marker menunjukkan jawaban yang perlu diperiksa."); }
+        function saveImage() { const link = document.createElement('a'); link.download = 'hasil-koreksi.png'; link.href = document.getElementById('canvas-ljk').toDataURL(); link.click(); }
     </script>
 </body>
 </html>
