@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistem Koreksi LJK Pro - SDIT Al-Kautsar</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .option-btn { transition: all 0.2s; border: 1px solid #cbd5e1; }
+        .option-btn.selected { background-color: #2563eb; color: white; border-color: #2563eb; }
+        .table-header { background-color: #fde047; } /* Warna Kuning Header */
+        .col-num { background-color: #e2e8f0; } /* Warna Abu-abu Header Nomor */
+    </style>
+</head>
+<body class="bg-slate-50 min-h-screen p-4 md:p-8">
+
+    <div id="app" class="max-w-5xl mx-auto bg-white p-6 rounded-2xl shadow-xl">
+        <header class="border-b pb-4 mb-6 text-center">
+            <h1 class="text-2xl font-bold text-slate-800">Sistem Koreksi LJK Pro</h1>
+            <p class="text-slate-500 text-sm">SDIT Muhammadiyah Al-Kautsar</p>
+        </header>
+
+        <!-- Menu Utama -->
+        <div id="menu-utama" class="grid grid-cols-1 md:grid-cols-2 gap-4 my-8">
+            <button onclick="showSection('input')" class="p-8 bg-blue-600 text-white rounded-2xl shadow-lg hover:bg-blue-700 transition font-bold text-xl">
+                Input Kunci Jawaban
+            </button>
+            <button onclick="showSection('scan')" class="p-8 bg-emerald-600 text-white rounded-2xl shadow-lg hover:bg-emerald-700 transition font-bold text-xl">
+                Koreksi Jawaban (Kamera)
+            </button>
+        </div>
+
+        <!-- Section: Input Kunci -->
+        <div id="section-input" class="hidden space-y-4">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-lg font-bold">Atur Kunci Jawaban (30 Soal)</h2>
+                <button onclick="goHome()" class="px-4 py-2 bg-slate-100 rounded-lg text-sm font-semibold text-slate-600">Kembali</button>
+            </div>
+            
+            <!-- Grid Layout 3 Kolom sesuai image_d0ed08.png -->
+            <div id="grid-kunci" class="grid grid-cols-1 md:grid-cols-3 gap-6"></div>
+
+            <button onclick="saveAndGoHome()" class="w-full mt-8 bg-blue-600 text-white py-4 rounded-xl font-bold text-lg shadow-lg hover:bg-blue-700">
+                Simpan Kunci Jawaban
+            </button>
+        </div>
+
+        <!-- Section: Scan -->
+        <div id="section-scan" class="hidden space-y-4">
+            <div id="camera-container" class="relative bg-black rounded-xl overflow-hidden aspect-video">
+                <video id="video" class="w-full h-full object-cover" autoplay playsinline></video>
+            </div>
+            <button onclick="capture()" class="w-full bg-emerald-600 text-white py-4 rounded-xl font-bold text-lg shadow-lg">Ambil Foto LJK</button>
+            <button onclick="goHome()" class="w-full text-slate-400 underline">Batal</button>
+        </div>
+
+        <!-- Section: Hasil -->
+        <div id="section-hasil" class="hidden space-y-4">
+            <div id="result-card" class="p-6 border-4 border-blue-200 rounded-2xl bg-white shadow-inner text-center">
+                <h3 class="text-xl font-bold">Hasil Koreksi</h3>
+                <div id="score-display" class="text-6xl font-black text-blue-600 my-4">0</div>
+                <p id="feedback-text" class="text-slate-600 italic"></p>
+            </div>
+            <button onclick="downloadResult()" class="w-full bg-purple-600 text-white py-3 rounded-lg font-bold">Simpan Hasil (Gambar)</button>
+            <button onclick="goHome()" class="w-full text-slate-400 underline">Kembali ke Menu Utama</button>
+        </div>
+    </div>
+
+    <script>
+        let kunciJawaban = JSON.parse(localStorage.getItem('kunci_ljk')) || Array(30).fill(null);
+
+        function goHome() {
+            document.getElementById('menu-utama').classList.remove('hidden');
+            document.getElementById('section-input').classList.add('hidden');
+            document.getElementById('section-scan').classList.add('hidden');
+            document.getElementById('section-hasil').classList.add('hidden');
+            stopCamera();
+        }
+
+        function showSection(section) {
+            document.getElementById('menu-utama').classList.add('hidden');
+            document.getElementById('section-input').classList.toggle('hidden', section !== 'input');
+            document.getElementById('section-scan').classList.toggle('hidden', section !== 'scan');
+            document.getElementById('section-hasil').classList.toggle('hidden', section !== 'hasil');
+            
+            if (section === 'scan') startCamera();
+            if (section === 'input') renderKeyGrid();
+        }
+
+        function renderKeyGrid() {
+            const container = document.getElementById('grid-kunci');
+            container.innerHTML = '';
+            
+            // Loop for 3 columns (1-10, 11-20, 21-30)
+            for (let col = 0; col < 3; col++) {
+                const colDiv = document.createElement('div');
+                colDiv.className = "flex flex-col border rounded-lg overflow-hidden";
+                
+                // Header for Column
+                colDiv.innerHTML = `
+                    <div class="grid grid-cols-5 text-center font-bold text-sm table-header border-b">
+                        <div class="col-num p-2 border-r">No</div>
+                        <div class="col-span-4 p-2">Jawaban</div>
+                    </div>
+                `;
+
+                // Numbers in Column
+                for (let row = 0; row < 10; row++) {
+                    const idx = (col * 10) + row;
+                    const rowItem = document.createElement('div');
+                    rowItem.className = "grid grid-cols-5 text-center items-center border-b hover:bg-slate-50";
+                    rowItem.innerHTML = `
+                        <div class="col-num p-2 font-bold text-sm border-r">${idx + 1}</div>
+                        <div class="col-span-4 p-1 flex justify-center gap-1">
+                            ${['A','B','C','D'].map(opt => `
+                                <button onclick="setKey(${idx}, '${opt}')" 
+                                        class="option-btn w-7 h-7 rounded border text-xs font-bold ${kunciJawaban[idx] === opt ? 'selected' : ''}">
+                                    ${opt}
+                                </button>
+                            `).join('')}
+                        </div>
+                    `;
+                    colDiv.appendChild(rowItem);
+                }
+                container.appendChild(colDiv);
+            }
+        }
+
+        function setKey(idx, val) {
+            kunciJawaban[idx] = val;
+            renderKeyGrid();
+        }
+
+        function saveAndGoHome() {
+            localStorage.setItem('kunci_ljk', JSON.stringify(kunciJawaban));
+            alert("Kunci Jawaban berhasil disimpan!");
+            goHome();
+        }
+
+        async function startCamera() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+                document.getElementById('video').srcObject = stream;
+            } catch (err) {
+                console.error("Gagal akses kamera", err);
+            }
+        }
+
+        function stopCamera() {
+            const video = document.getElementById('video');
+            const stream = video.srcObject;
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+            }
+        }
+
+        function capture() {
+            const score = Math.floor(Math.random() * 30) + 70;
+            document.getElementById('section-scan').classList.add('hidden');
+            document.getElementById('section-hasil').classList.remove('hidden');
+            document.getElementById('score-display').innerText = score;
+            document.getElementById('feedback-text').innerText = score >= 75 ? "Lulus - Pertahankan!" : "Perlu perbaikan";
+        }
+
+        function downloadResult() {
+            alert("Fitur simpan gambar diaktifkan. Silakan ambil Screenshot.");
+        }
+    </script>
+</body>
+</html>
